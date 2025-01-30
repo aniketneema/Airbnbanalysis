@@ -9,12 +9,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
+import swifter  # Speeds up pandas apply functions
 
-# Load the data
+# --- Load the Data ---
 @st.cache_data
 def load_data():
-    listings = pd.read_csv("/Users/apple/Downloads/listings.csv")
-    reviews = pd.read_csv("/Users/apple/Downloads/reviews.csv")
+    base_url = "https://data.insideairbnb.com/united-kingdom/england/london/2024-09-06/data/listings.csv.gz"
+    reviews_url = "https://data.insideairbnb.com/united-kingdom/england/london/2024-09-06/data/reviews.csv.gz"
+
+    listings = pd.read_csv(base_url, compression='gzip')
+    reviews = pd.read_csv(reviews_url, compression='gzip')
 
     # Convert price column to numeric
     listings["price"] = listings["price"].replace("[\$,]", "", regex=True).astype(float)
@@ -27,46 +31,42 @@ def load_data():
 
 listings, reviews = load_data()
 
-# Streamlit UI
-st.title("🏡 London Airbnb Analysis Dashboard")
+# --- Sidebar Filters ---
 st.sidebar.header("🔍 Filter Listings")
-
-# Sidebar filters
 price_range = st.sidebar.slider("Select Price Range (£)", int(listings["price"].min()), int(listings["price"].max()), (50, 300))
-room_type = st.sidebar.selectbox("Room Type", listings["room_type"].unique(), index=0)
-neighborhood = st.sidebar.selectbox("Select Neighborhood", listings["neighbourhood_cleansed"].unique(), index=0)
+room_type = st.sidebar.selectbox("Room Type", listings["room_type"].unique(), key="room_type_filter")
+neighborhood = st.sidebar.selectbox("Select Neighborhood", listings["neighbourhood_cleansed"].unique(), key="neighborhood_filter")
 
-# Filter data based on user input
+# --- Filter Data Based on Selection ---
 filtered_data = listings[(listings["price"].between(price_range[0], price_range[1])) &
                          (listings["room_type"] == room_type) &
                          (listings["neighbourhood_cleansed"] == neighborhood)]
 
-st.subheader(f"📌 Showing10 Listings")
+# --- Display Listings ---
+st.title("🏡 London Airbnb Analysis Dashboard")
+st.subheader("📌 Showing 10 Filtered Listings")
 st.write(filtered_data[["name", "host_name", "price", "room_type", "neighbourhood_cleansed"]].head(10))
 
-# --- Price Distribution ---
+# --- Price Distribution (Filtered) ---
 st.subheader("💰 Price Distribution")
-fig = px.histogram(listings, x="price", nbins=40, title="Price Distribution of Airbnb Listings")
+fig = px.histogram(filtered_data, x="price", nbins=40, title="Filtered Price Distribution")
 st.plotly_chart(fig)
 
-# --- Room Type vs Price ---
-st.subheader("🏠 Room Type vs Price")
-fig = px.box(listings, x="room_type", y="price", title="Price Comparison by Room Type", color="room_type")
-st.plotly_chart(fig)
-
-# --- Top Hosts by Listings ---
+# --- Top Hosts by Listings (Filtered) ---
 st.subheader("👑 Top Hosts")
-top_hosts = listings.groupby("host_name")["host_listings_count"].sum().sort_values(ascending=False).head(10)
-fig = px.bar(x=top_hosts.index, y=top_hosts.values, labels={"x": "Host", "y": "Number of Listings"}, title="Top 10 Hosts")
+top_hosts = filtered_data.groupby("host_name")["host_listings_count"].sum().sort_values(ascending=False).head(10)
+fig = px.bar(x=top_hosts.index, y=top_hosts.values, labels={"x": "Host", "y": "Number of Listings"}, title="Top 10 Hosts in Filtered Data")
 st.plotly_chart(fig)
 
 # --- Sentiment Analysis ---
 st.subheader("📝 Review Sentiment Analysis")
-def get_sentiment(text):
-    return TextBlob(str(text)).sentiment.polarity
 
-reviews["sentiment_score"] = reviews["comments"].apply(get_sentiment)
+@st.cache_data
+def get_sentiment_scores(reviews):
+    reviews["sentiment_score"] = reviews["comments"].dropna().swifter.apply(lambda text: TextBlob(str(text)).sentiment.polarity)
+    return reviews
 
+reviews = get_sentiment_scores(reviews)
 fig = px.histogram(reviews, x="sentiment_score", nbins=20, title="Sentiment Score Distribution")
 st.plotly_chart(fig)
 
@@ -92,70 +92,69 @@ sentiment_table = pd.DataFrame({
 
 st.table(sentiment_table)
 
-
-# --- Word Cloud for Reviews ---
+# --- Word Cloud ---
 st.subheader("💬 Most Common Words in Reviews")
 all_reviews = " ".join(reviews["comments"].dropna())
 wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_reviews)
-
 plt.figure(figsize=(10, 5))
 plt.imshow(wordcloud, interpolation="bilinear")
 plt.axis("off")
 st.pyplot(plt)
 
-
-listings["price"] = pd.to_numeric(listings["price"], errors='coerce')  # Convert to numeric
-listings["price"].fillna(listings["price"].median(), inplace=True)  # Replace NaN with median price
-
-# --- Map Visualization ---
+# --- Map Visualization (Filtered) ---
 st.subheader("📍 Airbnb Listings on Map")
-fig = px.scatter_mapbox(listings, lat="latitude", lon="longitude", color="price", size="price",
+fig = px.scatter_mapbox(filtered_data, lat="latitude", lon="longitude", color="price", size="price",
                          hover_data=["name", "host_name", "room_type"],
                          title="London Airbnb Map",
                          mapbox_style="open-street-map")
 st.plotly_chart(fig)
 
-st.write("🔍 *Data sourced from InsideAirbnb*")
-
-
+# --- Airbnb Price Prediction Model ---
 st.subheader("🔮 Predict Airbnb Price")
 
-# --- Data Preprocessing ---
-df_model = listings[["price", "room_type", "neighbourhood_cleansed", "accommodates", "bedrooms", "beds", "bathrooms_text"]].dropna()
+@st.cache_data
+def preprocess_data(listings):
+    df_model = listings[["price", "room_type", "neighbourhood_cleansed", "accommodates", "bedrooms", "beds", "bathrooms_text"]].dropna()
+    
+    # Convert bathrooms_text to numeric
+    df_model["bathrooms"] = df_model["bathrooms_text"].str.extract("(\d+)").astype(float)
 
-# Convert bathrooms_text to numeric
-df_model["bathrooms"] = df_model["bathrooms_text"].str.extract("(\d+)").astype(float)
+    # Label Encoding
+    le_room_type = LabelEncoder()
+    le_neighborhood = LabelEncoder()
 
-# Label Encoding for categorical variables
-le_room_type = LabelEncoder()
-le_neighborhood = LabelEncoder()
+    df_model["room_type_enc"] = le_room_type.fit_transform(df_model["room_type"])
+    df_model["neighborhood_enc"] = le_neighborhood.fit_transform(df_model["neighbourhood_cleansed"])
 
-df_model["room_type_enc"] = le_room_type.fit_transform(df_model["room_type"])
-df_model["neighborhood_enc"] = le_neighborhood.fit_transform(df_model["neighbourhood_cleansed"])
+    return df_model, le_room_type, le_neighborhood
 
-# Select features & target
+df_model, le_room_type, le_neighborhood = preprocess_data(listings)
+
+# Select Features & Target
 X = df_model[["room_type_enc", "neighborhood_enc", "accommodates", "bedrooms", "beds", "bathrooms"]]
 y = df_model["price"]
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Train Model
+@st.cache_data
+def train_model(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    return model
 
-# Train model
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+model = train_model(X, y)
 
 # --- Prediction Form ---
-
 st.write("🔢 Enter details below to predict the price of an Airbnb listing:")
 
-room_type_input = st.selectbox("Room Type", listings["room_type"].unique(), key="room_type_select")
-neighborhood_input = st.selectbox("Neighborhood", listings["neighbourhood_cleansed"].unique(), key="neighborhood_select")
-accommodates_input = st.slider("Accommodates", 1, 10, 2, key="accommodates_slider")
-bedrooms_input = st.slider("Bedrooms", 0, 5, 1, key="bedrooms_slider")
-beds_input = st.slider("Beds", 0, 5, 1, key="beds_slider")
-bathrooms_input = st.slider("Bathrooms", 0.0, 5.0, 1.0, key="bathrooms_slider")
+room_type_input = st.selectbox("Room Type", listings["room_type"].unique(), key="room_type_predict")
+neighborhood_input = st.selectbox("Neighborhood", listings["neighbourhood_cleansed"].unique(), key="neighborhood_predict")
+accommodates_input = st.slider("Accommodates", 1, 10, 2, key="accommodates_predict")
+bedrooms_input = st.slider("Bedrooms", 0, 5, 1, key="bedrooms_predict")
+beds_input = st.slider("Beds", 0, 5, 1, key="beds_predict")
+bathrooms_input = st.slider("Bathrooms", 0.0, 5.0, 1.0, key="bathrooms_predict")
 
-# Encode inputs
+# Encode inputs using stored LabelEncoders
 room_type_enc = le_room_type.transform([room_type_input])[0]
 neighborhood_enc = le_neighborhood.transform([neighborhood_input])[0]
 
@@ -165,6 +164,4 @@ if st.button("💰 Predict Price", key="predict_price_btn"):
     predicted_price = model.predict(input_data)[0]
     st.success(f"💵 Predicted Price: £{predicted_price:.2f}")
 
-
-
-
+st.write("🔍 *Data sourced from InsideAirbnb*")
