@@ -27,6 +27,22 @@ def load_data():
     listings["last_scraped"] = pd.to_datetime(listings["last_scraped"], errors='coerce')
     reviews["date"] = pd.to_datetime(reviews["date"], errors='coerce')
 
+    # Limit Listings to 50,000 with stratified sampling
+    if len(listings) > 50000:
+        listings = listings.groupby(["room_type", "neighbourhood_cleansed"], group_keys=False).apply(
+            lambda x: x.sample(min(len(x), 5000), random_state=42)
+        ).reset_index(drop=True)
+
+    # Limit Reviews to 50,000 while ensuring each listing has some reviews
+    if len(reviews) > 50000:
+        reviews = reviews.groupby("listing_id", group_keys=False).apply(
+            lambda x: x.sample(min(len(x), 10), random_state=42)  # Keep up to 10 reviews per listing
+        ).reset_index(drop=True)
+        
+        # If still > 50,000, take a random sample
+        if len(reviews) > 50000:
+            reviews = reviews.sample(n=50000, random_state=42).reset_index(drop=True)
+
     return listings, reviews
 
 listings, reviews = load_data()
