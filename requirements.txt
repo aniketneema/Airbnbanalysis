@@ -5,3 +5,5 @@ plotly
 textblob
 wordcloud
 scikit-learn
+seaborn
+matplotlib
