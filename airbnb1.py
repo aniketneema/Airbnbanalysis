@@ -60,6 +60,7 @@ filtered_data = listings[(listings["price"].between(price_range[0], price_range[
 
 # --- Display Listings ---
 st.title("🏡 London Airbnb Analysis Dashboard")
+st.subheader("this app contain data of only 50000 listings")
 st.subheader("📌 Showing 10 Filtered Listings")
 st.write(filtered_data[["name", "host_name", "price", "room_type", "neighbourhood_cleansed"]].head(10))
 
