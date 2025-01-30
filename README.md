@@ -41,7 +41,7 @@ Plotly (For visualizations)
 📉 Superhosts tend to have better ratings and higher occupancy rates.
 🌐 Live App
 
-🔗 Try the Interactive Dashboard: Your Streamlit App URL
+🔗 Try the Interactive Dashboard: https://london-airbnb-analysis.streamlit.app
 
 ⚙️ How to Run Locally
 
