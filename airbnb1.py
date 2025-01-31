@@ -19,7 +19,7 @@ import json
 
 # --- Google Drive API Setup ---
 # Load service account credentials
-SERVICE_ACCOUNT_FILE = st.secrets["google_drive"] # Path to your JSON key file
+SERVICE_ACCOUNT_FILE = json.loads(st.secrets["google_drive"]) # Path to your JSON key file
 
 # Authenticate and create a service object
 credentials = service_account.Credentials.from_service_account_info(
@@ -39,9 +39,9 @@ def stream_file_from_google_drive(file_id):
 
 # --- Load Dataset in Chunks ---
 
-def load_data_in_chunks(file_id, chunksize=10000):
+def load_data_in_chunks(file_id, chunksize=10000,nrows=50000):
     fh = stream_file_from_google_drive(file_id)
-    chunks = pd.read_csv(fh, chunksize=chunksize)
+    chunks = pd.read_csv(fh, chunksize=chunksize,nrows=nrows)
     return chunks
 
 # --- Load the Data ---
