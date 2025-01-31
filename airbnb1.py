@@ -19,7 +19,7 @@ import json
 
 # --- Google Drive API Setup ---
 # Load service account credentials
-SERVICE_ACCOUNT_FILE = json.loads(st.secrets["google_drive"]) # Path to your JSON key file
+SERVICE_ACCOUNT_FILE = st.secrets["google_drive"])# Path to your JSON key file
 
 # Authenticate and create a service object
 credentials = service_account.Credentials.from_service_account_info(
