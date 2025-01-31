@@ -27,7 +27,6 @@ credentials = service_account.Credentials.from_service_account_info(
 service = build("drive", "v3", credentials=credentials)
 
 # --- Function to Stream File from Google Drive ---
-@st.cache_data
 def stream_file_from_google_drive(file_id):
     request = service.files().get_media(fileId=file_id)
     fh = io.BytesIO()
