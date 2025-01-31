@@ -23,7 +23,7 @@ SERVICE_ACCOUNT_FILE = st.secrets["google_drive"] # Path to your JSON key file
 
 # Authenticate and create a service object
 credentials = service_account.Credentials.from_service_account_info(
-    google_drive_secrets, scopes=["https://www.googleapis.com/auth/drive.readonly"])
+   SERVICE_ACCOUNT_FILE, scopes=["https://www.googleapis.com/auth/drive.readonly"])
 service = build("drive", "v3", credentials=credentials)
 
 # --- Function to Stream File from Google Drive ---
