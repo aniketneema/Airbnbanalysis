@@ -10,15 +10,55 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 import swifter  # Speeds up pandas apply functions
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import io
+import json
+
+
+# --- Google Drive API Setup ---
+# Load service account credentials
+SERVICE_ACCOUNT_FILE = st.secrets["google_drive"] # Path to your JSON key file
+
+# Authenticate and create a service object
+credentials = service_account.Credentials.from_service_account_info(
+    google_drive_secrets, scopes=["https://www.googleapis.com/auth/drive.readonly"])
+service = build("drive", "v3", credentials=credentials)
+
+# --- Function to Stream File from Google Drive ---
+@st.cache_data
+def stream_file_from_google_drive(file_id):
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    return fh
+
+# --- Load Dataset in Chunks ---
+@st.cache_data
+def load_data_in_chunks(file_id, chunksize=10000):
+    fh = stream_file_from_google_drive(file_id)
+    chunks = pd.read_csv(fh, chunksize=chunksize)
+    return chunks
 
 # --- Load the Data ---
 @st.cache_data
 def load_data():
-    base_url = "https://data.insideairbnb.com/united-kingdom/england/london/2024-09-06/data/listings.csv.gz"
-    reviews_url = "https://data.insideairbnb.com/united-kingdom/england/london/2024-09-06/data/reviews.csv.gz"
+    # Google Drive file IDs (replace with your file IDs)
+    listings_file_id = "1kGbGzSujS6s3lofsBh8lkZZ85LNPNDKn"
+    reviews_file_id = "1tvrsGjFHcZ2SX5EQB-5a099XpFOGW0HS"
 
-    listings = pd.read_csv(base_url, compression='gzip')
-    reviews = pd.read_csv(reviews_url, compression='gzip')
+    # Load listings data
+    listings_chunks = load_data_in_chunks(listings_file_id)
+    listings = pd.concat(listings_chunks)
+
+    # Load reviews data
+    reviews_chunks = load_data_in_chunks(reviews_file_id)
+    reviews = pd.concat(reviews_chunks)
 
     # Convert price column to numeric
     listings["price"] = listings["price"].replace("[\$,]", "", regex=True).astype(float)
@@ -26,22 +66,6 @@ def load_data():
     # Convert date columns
     listings["last_scraped"] = pd.to_datetime(listings["last_scraped"], errors='coerce')
     reviews["date"] = pd.to_datetime(reviews["date"], errors='coerce')
-
-    # Limit Listings to 50,000 with stratified sampling
-    if len(listings) > 50000:
-        listings = listings.groupby(["room_type", "neighbourhood_cleansed"], group_keys=False).apply(
-            lambda x: x.sample(min(len(x), 5000), random_state=42)
-        ).reset_index(drop=True)
-
-    # Limit Reviews to 50,000 while ensuring each listing has some reviews
-    if len(reviews) > 50000:
-        reviews = reviews.groupby("listing_id", group_keys=False).apply(
-            lambda x: x.sample(min(len(x), 10), random_state=42)  # Keep up to 10 reviews per listing
-        ).reset_index(drop=True)
-        
-        # If still > 50,000, take a random sample
-        if len(reviews) > 50000:
-            reviews = reviews.sample(n=50000, random_state=42).reset_index(drop=True)
 
     return listings, reviews
 
@@ -60,7 +84,6 @@ filtered_data = listings[(listings["price"].between(price_range[0], price_range[
 
 # --- Display Listings ---
 st.title("🏡 London Airbnb Analysis Dashboard")
-st.subheader("this app contain data of only 50000 listings")
 st.subheader("📌 Showing 10 Filtered Listings")
 st.write(filtered_data[["name", "host_name", "price", "room_type", "neighbourhood_cleansed"]].head(10))
 
