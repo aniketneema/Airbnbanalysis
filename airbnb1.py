@@ -38,14 +38,14 @@ def stream_file_from_google_drive(file_id):
     return fh
 
 # --- Load Dataset in Chunks ---
-@st.cache_data
+
 def load_data_in_chunks(file_id, chunksize=10000):
     fh = stream_file_from_google_drive(file_id)
     chunks = pd.read_csv(fh, chunksize=chunksize)
     return chunks
 
 # --- Load the Data ---
-@st.cache_data
+
 def load_data():
     # Google Drive file IDs (replace with your file IDs)
     listings_file_id = "1kGbGzSujS6s3lofsBh8lkZZ85LNPNDKn"
@@ -108,6 +108,7 @@ def get_sentiment_scores(reviews):
 reviews = get_sentiment_scores(reviews)
 fig = px.histogram(reviews, x="sentiment_score", nbins=20, title="Sentiment Score Distribution")
 st.plotly_chart(fig)
+
 
 st.subheader("📖 What Each Sentiment Score Means")
 sentiment_table = pd.DataFrame({
@@ -174,7 +175,7 @@ X = df_model[["room_type_enc", "neighborhood_enc", "accommodates", "bedrooms", "
 y = df_model["price"]
 
 # Train Model
-@st.cache_data
+@st.cache_resource
 def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model = RandomForestRegressor(n_estimators=100, random_state=42)
