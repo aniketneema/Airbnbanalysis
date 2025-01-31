@@ -39,7 +39,7 @@ def stream_file_from_google_drive(file_id):
 
 # --- Load Dataset in Chunks ---
 
-def load_data_in_chunks(file_id, chunksize=10000,nrows=50000):
+def load_data_in_chunks(file_id, chunksize=10000,nrows=20000):
     fh = stream_file_from_google_drive(file_id)
     chunks = pd.read_csv(fh, chunksize=chunksize,nrows=nrows)
     return chunks
@@ -83,6 +83,7 @@ filtered_data = listings[(listings["price"].between(price_range[0], price_range[
 
 # --- Display Listings ---
 st.title("🏡 London Airbnb Analysis Dashboard")
+st.subheader("app showing result based on a sample of 20000 listing")
 st.subheader("📌 Showing 10 Filtered Listings")
 st.write(filtered_data[["name", "host_name", "price", "room_type", "neighbourhood_cleansed"]].head(10))
 
